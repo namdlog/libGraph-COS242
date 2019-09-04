@@ -118,6 +118,7 @@ void gLadj::bfs_l(int s,bool printTree){
             if(i!=s && p[i] == 0 && ni[i] == 0) p[i]--,ni[i]--;
             bfsFile << i << "\t" << p[i] << "\t" << ni[i] << endl; 
         }
+        bfsFile.close();
     }
 
 }
@@ -170,6 +171,7 @@ void gLadj::dfs_l(int s,bool printTree){
             if(i!=s && p[i] == 0 && ni[i] == 0) p[i]--,ni[i]--;
             dfsFile << i << "\t" << p[i] << "\t" << ni[i] << endl; 
         }
+        dfsFile.close();
     }
 }
 
@@ -309,6 +311,7 @@ void gLadj::componentesConexas_l(){
         }
         compoInfoFile << endl;
     }
+    compoInfoFile.close();
     
 }
 

@@ -125,6 +125,7 @@ void gMadj::bfs_m(int s,bool printTree){
             if(i!=s && p[i] == 0 && ni[i] == 0) p[i]--,ni[i]--;
             bfsFile << i << "\t" << p[i] << "\t" << ni[i] << endl; 
         }
+        bfsFile.close();
     }
 }
 
@@ -178,6 +179,7 @@ void gMadj::dfs_m(int s,bool printTree){
             if(i!=s && p[i] == 0 && ni[i] == 0) p[i]--,ni[i]--;
             dfsFile << i << "\t" << p[i] << "\t" << ni[i] << endl; 
         }
+        dfsFile.close();
     }
 }
 
@@ -315,5 +317,5 @@ void gMadj::componentesConexas_m(){
         }
         compoInfoFile << endl;
     }
-   
+    compoInfoFile.close();
 }
