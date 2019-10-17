@@ -6,7 +6,6 @@
 #include <queue>
 #include <vector>
 
-
 using namespace std;
 
 class gLadj{
@@ -24,15 +23,25 @@ class gLadj{
         int *visConex;                      // Ponteiro para Array de visitados das componentes conexas
         int *p;                             // Ponteiro para Array de Pais
         int *ni;                            // Ponteiro para Array de Nível
-        int *grau;                          // ponteiro para vetor que armazena o grau
+        int *grau;                          // Ponteiro para Array que armazena o grau
+        double *d;                          // Ponteiro para Array de distâncias calculadas pelo algoritmo de Dijkstra
+        int *pd;                            // Ponteiro para Array que armazena o pai dos vértices durante o algoritmo de Dijkstra
+        bool fd;                            // Flag de Dijkstra
+        bool td;                            // Teste de Dijkstra
+        double *custo;                      // Ponteiro para Array de custo do algoritmo de Prim para calcular a MST 
+        double *ex;                         // Ponteiro para Array que armazena a excentricidade de um vértice
+        int *pmst;                          // Ponteiro para Array que armazena a árvore do MST
 
-        list<int> *lAdj;                    // Lista de Adjacência do Grafo
+        list<pair<int,double>> *lAdj;       // Lista de Adjacência do Grafo
         vector<int> *compConex;             // Array de componentes conexas
         gLadj(string fName);                // Construtor do Grafo em Lista
         int diametro_l();                   // Função Diâmetro
-        int dist_l(int s, int t);           // Função Distância
+        int dist_bfs(int s, int t);         // Função que calcula a Distância por BFS em grafo sem peso
+        void dist_l(int s, int t);          // Função que calcula a Distância e o Caminho por Dijkstra ou BFS dependendo do grafo
         void bfs_l(int u,bool printTree);   // Busca em Largura
         void dfs_l(int u,bool printTree);   // Busca em Profundidade
         void componentesConexas_l();        // Componentes Conexas em Lista
-
+        void Dijkstra_l(int u);               // Algoritmo de Dijkstra com source no vértice u
+        void mst_l(int u);                         // Algoritmo para gerar a MST do grafo
+        double exc_l(int u);                  // Calcula a Excentricidade de um vértice
 };

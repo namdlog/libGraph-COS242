@@ -1,25 +1,36 @@
 #include <stdio.h>
 #include <iostream>
-#include <chrono>
-#include <string>
-#include <algorithm>
-#include <fstream>
+#include <list>
 #include <stack>
+#include <chrono>
 #include <queue>
+#include <vector>
+#include <set>
+#include <algorithm>
+#include <stdio.h> 
+#include <string.h>
+#include <string>
+#include <fstream>
+#include <functional>
+#include <omp.h>
 #include "gMadj.h"
 
 // Função de comparar tamanho de vetores para ordenar as componentes conexas
 bool comparaComp_m (vector<int> a,vector<int> b) { return (a.size()>b.size()); }
-    
+
+// Constante que representa um número muito grande
+const double INF = 0x3f3f3f3f;
+
 // Construtor do grafo em Matriz de adjacência    
 gMadj::gMadj(string fName){
 
     // Variáveis utlizadas durante o preenchimento do grafo
     int u;                       // Vértice genérico u
     int v;                       // Vértice genérico v
+    double w;                    // Peso da aresta entre u e v
     int m_grauMin = 0x3f3f3f;    // Grau mínimo do grafo
     int m_grauMax = 0;           // Grau máximo do grafo
-    int *grau;                   // Grau de um vértice
+    int size;                    // Grau de um vértice
 
     m_numArestas = 0; // Número de arestas é inicializado com 0
     
@@ -27,40 +38,73 @@ gMadj::gMadj(string fName){
     ifstream graphFile (fName);
     graphFile >> m_numVertices; // Lê na primeira linha do arquivo o número de vértices do grafo
     
-    grau = new int[m_numVertices+1](); // Array de grau de um vértice
-    vis = new bool[m_numVertices+1](); // Array de visitado para algoritmos busca
-    ni = new int[m_numVertices+1]();   // Array de nível para árvore de busca
-    p = new int[m_numVertices+1]();    // Array de pai para árvore de busca
+    grau = new int[m_numVertices+1]();     // Array de grau de um vértice
+    vis = new bool[m_numVertices+1]();     // Array de visitado para algoritmos busca
+    ni = new int[m_numVertices+1]();       // Array de nível para árvore de busca
+    p = new int[m_numVertices+1]();        // Array de pai para árvore de busca
+    d = new double[m_numVertices+1]();     // Array de distâncias calculadas pelo algoritmo de Dijksta
+    custo = new double[m_numVertices+1](); // Array de custo da MST
+    pd = new int[m_numVertices+1]();       // Array de pai de Dijksta
+    ex = new double[m_numVertices+1]();    // Array da excentricidade de um vértice
+    pmst = new int [m_numVertices+1]();    // Array com a árvore geradora mínimas
 
     // Estrutura do grafo em sí. Array de arrays. Matriz de Adjacência
-    mAdj = new bool *[m_numVertices+1];
+    mAdj = new double *[m_numVertices+1];
     
     // Cada posição do array aloca um array que representa uma linha na matriz
     for(int i=0;i<=m_numVertices;i++){
-        mAdj[i] = new bool[m_numVertices+1];
+        mAdj[i] = new double[m_numVertices+1];
     }
 
-    // Deixa tudo como falso (0)
+    // Deixa tudo como 0.0
     for(int i=0;i<=m_numVertices;i++){
         for(int j=0;j<m_numVertices+1;j++){
-            mAdj[i][j] = false;
+            mAdj[i][j] = 0.0;
         }
     }
     
     //Define número de arestas inicialmente como zeros
     m_numArestas = 0;
-    
-    // Leitura e armazenamento dos finais das arestas e cálculo dos graus mínimo e máximo
-    while(graphFile >> u >> v){
-        m_numArestas++;
-        grau[u]++;
-        grau[v]++;
-        m_grauMin = min(m_grauMin,min(grau[u],grau[v]));
-        m_grauMax = max(m_grauMax,max(grau[u],grau[v]));
-        mAdj[u][v] = true;
-        mAdj[v][u] = true;
+
+    // Leitura e armazenamento dos finais das arestas
+    ifstream graphFileTeste (fName);
+    int r=0;
+    string s;
+    getline(graphFileTeste,s);
+    getline(graphFileTeste,s);
+    for(int i=0;i<s.size();i++){
+        if(s[i] == ' ') r++;
     }
-   
+    
+    if(r == 2) td=1;
+    else td=0;
+
+    if(td){
+        while(graphFile >> u >> v >> w){
+            m_numArestas++;
+            grau[u]++;
+            grau[v]++;
+            m_grauMin = min(m_grauMin,min(grau[u],grau[v]));
+            m_grauMax = max(m_grauMax,max(grau[u],grau[v]));
+            mAdj[u][v] = w;
+            mAdj[v][u] = w;
+            if(w < 0.0){
+                fd = 1;
+            }
+        }
+    }else{
+        fd = 1;
+        while(graphFile >> u >> v){
+            m_numArestas++;
+            grau[u]++;
+            grau[v]++;
+            m_grauMin = min(m_grauMin,min(grau[u],grau[v]));
+            m_grauMax = max(m_grauMax,max(grau[u],grau[v]));
+            mAdj[u][v] = 1;
+            mAdj[v][u] = 1;
+        }
+    }
+    
     // Cálculo do grau médio
     m_grauMedio = ((2*m_numArestas)/m_numVertices);
 
@@ -184,7 +228,7 @@ void gMadj::dfs_m(int s,bool printTree){
 }
 
 // Distância entre dois vértices no grafo
-int gMadj::dist_m(int s, int t){
+int gMadj::dist_bfs(int s, int t){
 
     // Infinito caso eles estejam em componentes conexas distintas
     int inf = 0x3f3f3f3f;
@@ -218,7 +262,7 @@ int gMadj::dist_m(int s, int t){
         } 
     }
 
-    // Caso so algoritmo não tenha retornado nada, significa que eles estão em componentes desconexas, logo sua distância é infinita
+    // Caso so algoritmo não tenha retornado nada ainda, significa que eles estão em componentes desconexas, logo sua distância é infinita
     return inf;
 }
 
@@ -318,4 +362,114 @@ void gMadj::componentesConexas_m(){
         compoInfoFile << endl;
     }
     compoInfoFile.close();
+}
+
+void gMadj::Dijkstra_m(int u){
+    if(fd){
+        cout << "Não foi possível rodar o algoritmo de Dijkstra pois o grafo possui aresta com peso negativo." << endl;
+    }
+    else{
+        for(int i=0;i<=m_numVertices;i++) d[i] = INF;
+        d[u] = 0;
+        using pdi = pair<double,int>;
+        priority_queue<pdi,vector<pdi>,greater<pdi>> q;
+        q.push({0,u});
+        while(!q.empty()){
+            int v = q.top().second;
+            double d_v = q.top().first;
+            q.pop();  
+            if(d_v!=d[v])
+                continue;
+
+            for(int i=1;i<=m_numVertices;i++){
+                if(mAdj[v][i] != 0){
+                    int to = i;
+                    double len = mAdj[v][i];
+                    if(d[v] + len < d[to]){
+                        d[to] = d[v] + len;
+                        ex[u] = max(ex[u],d[to]);
+                        pd[to] = v;
+                        q.push({d[to],to});
+                    }
+                }
+            }
+        }
+    }
+}
+
+void gMadj::dist_m(int s,int t){
+    ofstream dist;
+    dist.open ("DistPath.txt");
+    if(td){
+        Dijkstra_m(s);
+        if(!fd){
+            if(d[t] != INF){
+                dist << "Distância entre " << s << " e " << t << ": " << d[t] << endl;
+                dist << "Caminho: ";
+                while(t != s && t != 0 ){
+                    dist << t << " ";
+                    t = pd[t];
+                }
+                dist << s << endl;
+            }
+            else{
+                dist << "Distância entre " << s << " e " << t << ": Infinito, pois estão em componentes conexas distintas." << endl;
+            }
+        }
+    }else{
+        bfs_m(s,0);
+        dist << "Distância entre " << s << " e " << t << ": " << ni[t] << endl;
+        dist << "Caminho: ";
+        while(t != s && t != 0 ){
+            dist << t << " ";
+            t = p[t];
+        }
+        dist << s << endl;    
+    }
+    dist.close();
+}
+
+void gMadj::mst_m(int u){
+    double tot = 0;
+    for(int i=0;i<=m_numVertices;i++) custo[i] = INF;
+    custo[u] = 0;
+    using pdi = pair<double,int>;
+    vector<bool> processado(m_numVertices+1,false);
+    priority_queue<pdi,vector<pdi>,greater<pdi>> q;
+    q.push({0,u});
+    while(!q.empty()){
+        int v = q.top().second;
+        double d_v = q.top().first;
+        q.pop();
+        processado[v] = true;
+        for(int i=1;i<=m_numVertices;i++){
+            if(mAdj[v][i] != 0){
+                int to = i;
+                double len = mAdj[v][i];
+                if(custo[to]>len && !processado[to]){
+                    custo[to] = len;
+                    pmst[to] = v;
+                    q.push({custo[to],to});
+                }
+            }
+        }
+    }
+    for(int i=1;i<=m_numVertices;i++){
+        if(custo[i]!=INF)
+            tot += custo[i];
+    }
+    ofstream mst;
+    mst.open ("MST.txt");
+    mst << "Custo da MST: " << tot << endl;
+    mst.close();
+}
+
+double gMadj::exc_m(int u){
+    if(!fd){
+        Dijkstra_m(u);
+        return ex[u];
+    }else{
+        cout << "Não foi possível calcular a Excentricidade pois o grafo possui arestas negativas." << endl;
+        return 0;
+    }
 }

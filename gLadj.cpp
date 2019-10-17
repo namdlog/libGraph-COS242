@@ -2,26 +2,35 @@
 #include <iostream>
 #include <list>
 #include <stack>
+#include <chrono>
 #include <queue>
 #include <vector>
+#include <set>
 #include <algorithm>
+#include <stdio.h> 
+#include <string.h>
 #include <string>
 #include <fstream>
+#include <functional>
 #include <omp.h>
 #include "gLadj.h"
 
 // Função de comparar tamanho de vetores para ordenar as componentes conexas
 bool comparaComp_l (vector<int> a,vector<int> b) { return (a.size()>b.size()); }
-    
+
+// Constante que representa um número muito grande
+const double INF = 0x3f3f3f3f;
+
 // Construtor do grafo em lista de adjacência
 gLadj::gLadj(string fName){
     
     // Variáveis utlizadas durante o preenchimento do grafo
     int u;                    // Vértice genérico u
     int v;                    // Vértice genérico v
+    double w;                    // Peso da aresta entre u e v
     int m_grauMin = 0x3f3f3f; // Grau mínimo do grafo
     int m_grauMax = 0;        // Grau máximo do grafo
-    int size;                 // Grau de um vértice
+    int size;                 // Grau de um vértices
 
     m_numArestas = 0; // Número de arestas é inicializado com 0
 
@@ -29,23 +38,53 @@ gLadj::gLadj(string fName){
     ifstream graphFile (fName);
     graphFile >> m_numVertices; // Lê na primeira linha do arquivo o número de vértices do grafo
 
-    grau = new int[m_numVertices+1](); // Array de grau de um vértice
-    vis = new bool[m_numVertices+1](); // Array de visitado para algoritmos busca
-    ni = new int[m_numVertices+1]();   // Array de nível para árvore de busca
-    p = new int[m_numVertices+1]();    // Array de pai para árvore de busca
+    grau = new int[m_numVertices+1]();     // Array de grau de um vértice
+    vis = new bool[m_numVertices+1]();     // Array de visitado para algoritmos busca
+    ni = new int[m_numVertices+1]();       // Array de nível para árvore de busca
+    p = new int[m_numVertices+1]();        // Array de pai para árvore de busca
+    d = new double[m_numVertices+1]();     // Array de distâncias calculadas pelo algoritmo de Dijksta
+    custo = new double[m_numVertices+1](); // Array de custo da MST
+    pd = new int[m_numVertices+1]();       // Array de pai de Dijksta
+    ex = new double[m_numVertices+1]();    // Array da excentricidade de um vértice
+    pmst = new int [m_numVertices+1]();    // Array com a árvore geradora mínima
     
     // Estrutura do grafo em sí. array de listas de adjacência
-    lAdj = new list<int>[m_numVertices+1]();
+    lAdj = new list<pair<int,double>>[m_numVertices+1]();
 
     // Leitura e armazenamento dos finais das arestas
-    while(graphFile >> u >> v){
-        m_numArestas++;
-        lAdj[u].push_back(v);
-        lAdj[v].push_back(u);
-        grau[u-1]++;
-        grau[v-1]++;
+    ifstream graphFileTeste (fName);
+    int r=0;
+    string s;
+    getline(graphFileTeste,s);
+    getline(graphFileTeste,s);
+    for(int i=0;i<s.size();i++){
+        if(s[i] == ' ') r++;
     }
-   
+    
+    if(r == 2) td=1;
+    else td=0;
+
+    if(td){
+        while(graphFile >> u >> v >> w){
+            m_numArestas++;
+            lAdj[u].push_back({v,w});
+            lAdj[v].push_back({u,w});
+            grau[u]++;
+            grau[v]++;
+            if(w < 0.0){
+                fd = 1;
+            }
+        }
+    }else{
+        while(graphFile >> u >> v){
+            m_numArestas++;
+            lAdj[u].push_back({v,1});
+            lAdj[v].push_back({u,1});
+            grau[u]++;
+            grau[v]++;
+        }
+    }
+
     // Cálculo do grau médio
     m_grauMedio = ((2*m_numArestas)/m_numVertices);
     
@@ -84,10 +123,8 @@ void gLadj::bfs_l(int s,bool printTree){
     memset(vis,false,sizeof(bool)*(m_numVertices+1));
     
     // Caso o usuário queira imprimir o arquivo da árvore de busca, esse bloco limpa os arrays de pai e nível
-    if(printTree){
-        memset(ni,0,sizeof(bool)*(m_numVertices+1));
-        memset(p,0,sizeof(bool)*(m_numVertices+1));
-    }
+    memset(ni,0,sizeof(bool)*(m_numVertices+1));
+    memset(p,0,sizeof(bool)*(m_numVertices+1));
     
     // BFS
     q.push(s);
@@ -95,12 +132,11 @@ void gLadj::bfs_l(int s,bool printTree){
     while(!q.empty()){
         int u = q.front();
         q.pop();
-        for(int v: lAdj[u]){
+        for(auto edge: lAdj[u]){
+            int v = edge.first;
             if(!vis[v]){
-                if(printTree){
-                    p[v] = u;
-                    ni[v] = ni[u]+1;
-                }
+                p[v] = u;
+                ni[v] = ni[u]+1;
                 q.push(v);
                 vis[v] = true;
             }
@@ -150,7 +186,8 @@ void gLadj::dfs_l(int s,bool printTree){
         st.pop();
         if(!vis[u]){
             vis[u] = 1;
-            for(int v: lAdj[u]){
+            for(auto edge: lAdj[u]){
+                int v = edge.first;
                 if(p[v] == 0 && ni[v] == 0 && v!=s && printTree){
                     p[v] = u;
                     ni[v] = ni[u]+1;
@@ -176,7 +213,7 @@ void gLadj::dfs_l(int s,bool printTree){
 }
 
 // Distância entre dois vértices no grafo
-int gLadj::dist_l(int s, int t){
+int gLadj::dist_bfs(int s, int t){
 
     // Infinito caso eles estejam em componentes conexas distintas
     int inf = 0x3f3f3f3f;
@@ -199,7 +236,8 @@ int gLadj::dist_l(int s, int t){
     while(!q.empty()){
         int u = q.front();
         q.pop();
-        for(int v: lAdj[u]){
+        for(auto edge: lAdj[u]){
+            int v = edge.first;
             if(!vis[v]){
                 // Caso o vértice desejado seja alcançado retorna o nível que é igual a distância
                 if(v == t) return ni[u]+1;
@@ -241,7 +279,8 @@ int gLadj::diametro_l(){
         while(!q.empty()){
             int u = q.front();
             q.pop();
-            for(int v: lAdj[u]){
+            for(auto edge: lAdj[u]){
+                int v = edge.first;
                 if(ni[v]==-1){
                     ni[v] = ni[u]+1;
                     mx = max(mx,ni[v]);
@@ -281,7 +320,8 @@ void gLadj::componentesConexas_l(){
             while(!q.empty()){
                 int u = q.front();
                 q.pop();
-                for(int v: lAdj[u]){
+                for(auto edge : lAdj[u]){
+                    int v = edge.first;
                     if(!visConex[v]){
                         q.push(v);
                         visConex[v] = compId;
@@ -315,3 +355,109 @@ void gLadj::componentesConexas_l(){
     
 }
 
+void gLadj::Dijkstra_l(int u){
+    if(fd){
+        cout << "Não foi possível rodar o algoritmo de Dijkstra pois o grafo possui aresta com peso negativo." << endl;
+    }
+    else{
+        for(int i=0;i<=m_numVertices;i++) d[i] = INF;
+        d[u] = 0;
+        using pdi = pair<double,int>;
+        priority_queue<pdi,vector<pdi>,greater<pdi>> q;
+        q.push({0,u});
+        while(!q.empty()){
+            int v = q.top().second;
+            double d_v = q.top().first;
+            q.pop();
+        
+            if(d_v!=d[v])
+                continue;
+
+            for(auto edge: lAdj[v]){
+                int to = edge.first;
+                double len = edge.second;
+                if(d[v] + len < d[to]){
+                    d[to] = d[v] + len;
+                    ex[u] = max(ex[u],d[to]);
+                    pd[to] = v;
+                    q.push({d[to],to});
+                }
+            }
+        }   
+    }
+}
+
+void gLadj::dist_l(int s,int t){
+    ofstream dist;
+    dist.open ("DistPath.txt");
+    if(td){
+        Dijkstra_l(s);
+        if(!fd){
+            if(d[t] != INF){
+                dist << "Distância entre " << s << " e " << t << ": " << d[t] << endl;
+                dist << "Caminho: ";
+                while(t != s && t != 0 ){
+                    dist << t << " ";
+                    t = pd[t];
+                }
+                dist << s << endl;
+            }
+            else{
+                dist << "Distância entre " << s << " e " << t << ": Infinito, pois estão em componentes conexas distintas." << endl;
+            }
+        }
+    }else{
+        bfs_l(s,0);
+        dist << "Distância entre " << s << " e " << t << ": " << ni[t] << endl;
+        dist << "Caminho: ";
+        while(t != s && t != 0 ){
+            dist << t << " ";
+            t = p[t];
+        }
+        dist << s << endl;    
+    }
+    dist.close();
+}
+
+void gLadj::mst_l(int u){
+    double tot = 0;
+    for(int i=0;i<=m_numVertices;i++) custo[i] = INF;
+    custo[u] = 0;
+    using pdi = pair<double,int>;
+    vector<bool> processado(m_numVertices+1,false);
+    priority_queue<pdi,vector<pdi>,greater<pdi>> q;
+    q.push({0,u});
+    while(!q.empty()){
+        int v = q.top().second;
+        double d_v = q.top().first;
+        q.pop();
+        processado[v] = true;
+        for(auto edge: lAdj[v]){
+            int to = edge.first;
+            double len = edge.second;
+            if(custo[to]>len && !processado[to]){
+                custo[to] = len;
+                pmst[to] = v;
+                q.push({custo[to],to});
+            }
+        }
+    }
+    for(int i=1;i<=m_numVertices;i++){
+        if(custo[i]!=INF)
+            tot += custo[i];
+    }
+    ofstream mst;
+    mst.open ("MST.txt");
+    mst << "Custo da MST: " << tot << endl;
+    mst.close();
+}
+
+double gLadj::exc_l(int u){
+    if(!fd){
+        Dijkstra_l(u);
+        return ex[u];
+    }else{
+        cout << "Não foi possível calcular a Excentricidade pois o grafo possui arestas negativas." << endl;
+        return 0;
+    }
+}
