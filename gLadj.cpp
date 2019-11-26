@@ -24,10 +24,11 @@ const double INF = 0x3f3f3f3f;
 // Construtor do grafo em lista de adjacência
 gLadj::gLadj(string fName){
     
+    is_bipartie = true;
     // Variáveis utlizadas durante o preenchimento do grafo
     int u;                    // Vértice genérico u
     int v;                    // Vértice genérico v
-    double w;                    // Peso da aresta entre u e v
+    double w;                 // Peso da aresta entre u e v
     int m_grauMin = 0x3f3f3f; // Grau mínimo do grafo
     int m_grauMax = 0;        // Grau máximo do grafo
     int size;                 // Grau de um vértices
@@ -35,11 +36,42 @@ gLadj::gLadj(string fName){
     m_numArestas = 0; // Número de arestas é inicializado com 0
 
     // Leitura do arquivo passado no parâmetro do construtor
+    int h=0,r=0,td=0,tdg=0;
+    string s;
+
+    ifstream graphFileTesteUm (fName);
+    
+        getline(graphFileTesteUm,s);
+        for(int i=0;i<s.size();i++){
+            if(s[i] == ' ') h++;
+        }
+        if(h){
+            tdg = 1;
+        }
+
+    graphFileTesteUm.close();
+
+    ifstream graphFileTeste (fName);
+    
+        getline(graphFileTeste,s);
+        getline(graphFileTeste,s);
+        for(int i=0;i<s.size();i++){
+            if(s[i] == ' ') 
+                r++;
+        }
+        if(r == 2) 
+            td=1;
+        else 
+            td=0;
+
+    graphFileTeste.close();
+
     ifstream graphFile (fName);
     graphFile >> m_numVertices; // Lê na primeira linha do arquivo o número de vértices do grafo
+    if(tdg) graphFile >> m_digraph;
 
     grau = new int[m_numVertices+1]();     // Array de grau de um vértice
-    vis = new bool[m_numVertices+1]();     // Array de visitado para algoritmos busca
+    vis = new int[m_numVertices+1]();      // Array de visitado para algoritmos busca
     ni = new int[m_numVertices+1]();       // Array de nível para árvore de busca
     p = new int[m_numVertices+1]();        // Array de pai para árvore de busca
     d = new double[m_numVertices+1]();     // Array de distâncias calculadas pelo algoritmo de Dijksta
@@ -47,44 +79,59 @@ gLadj::gLadj(string fName){
     pd = new int[m_numVertices+1]();       // Array de pai de Dijksta
     ex = new double[m_numVertices+1]();    // Array da excentricidade de um vértice
     pmst = new int [m_numVertices+1]();    // Array com a árvore geradora mínima
+    b = new int[m_numVertices+1];          // Array que armazena o matching de cada vértice
+    dist = new int[m_numVertices+1]();     // Array que armazena distância do HopCroft-Karp
+    dbf = new double[m_numVertices+1]();   // Array que armazena as distâncias do Bellmanford
+    graphBipartite_A = new vector<int>;    // Vetor que armazena os vértices do grupo A do Grafo bipartido
+    graphBipartite_B = new vector<int>;    // Vetor que armazena os vértices do grupo B do Grafo bipartido
     
     // Estrutura do grafo em sí. array de listas de adjacência
     lAdj = new list<pair<int,double>>[m_numVertices+1]();
 
     // Leitura e armazenamento dos finais das arestas
-    ifstream graphFileTeste (fName);
-    int r=0;
-    string s;
-    getline(graphFileTeste,s);
-    getline(graphFileTeste,s);
-    for(int i=0;i<s.size();i++){
-        if(s[i] == ' ') r++;
-    }
     
-    if(r == 2) td=1;
-    else td=0;
-
-    if(td){
-        while(graphFile >> u >> v >> w){
-            m_numArestas++;
-            lAdj[u].push_back({v,w});
-            lAdj[v].push_back({u,w});
-            grau[u]++;
-            grau[v]++;
-            if(w < 0.0){
-                fd = 1;
+    // Caso o grafo seja um grafo direcionado ou não, as leituras serão diferentes
+    if(m_digraph){
+        if(td){
+            while(graphFile >> u >> v >> w){
+                m_numArestas++;
+                lAdj[u].push_back({v,w});
+                grau[u]++;
+                if(w < 0.0){
+                    fd = 1;
+                }
+            }
+        }else{
+            while(graphFile >> u >> v){
+                m_numArestas++;
+                lAdj[u].push_back({v,1});
+                grau[u]++;
             }
         }
-    }else{
-        while(graphFile >> u >> v){
-            m_numArestas++;
-            lAdj[u].push_back({v,1});
-            lAdj[v].push_back({u,1});
-            grau[u]++;
-            grau[v]++;
+    }
+    else{
+        if(td){
+            while(graphFile >> u >> v >> w){
+                m_numArestas++;
+                lAdj[u].push_back({v,w});
+                lAdj[v].push_back({u,w});
+                grau[u]++;
+                grau[v]++;
+                if(w < 0.0){
+                    fd = 1;
+                }
+            }
+        }else{
+            while(graphFile >> u >> v){
+                m_numArestas++;
+                lAdj[u].push_back({v,1});
+                lAdj[v].push_back({u,1});
+                grau[u]++;
+                grau[v]++;
+            }
         }
     }
-
+    graphFile.close();
     // Cálculo do grau médio
     m_grauMedio = ((2*m_numArestas)/m_numVertices);
     
@@ -111,6 +158,8 @@ gLadj::gLadj(string fName){
 // (BFS) Breadth-First Search na lista
 void gLadj::bfs_l(int s,bool printTree){
 
+    
+    
     // Fila de busca
     queue<int> q;
 
@@ -120,43 +169,62 @@ void gLadj::bfs_l(int s,bool printTree){
     }
     
     // Limpa o vetor de visitados antes de começar o algoritmo
-    memset(vis,false,sizeof(bool)*(m_numVertices+1));
+    memset(vis,-1,sizeof(int)*(m_numVertices+1));
     
     // Caso o usuário queira imprimir o arquivo da árvore de busca, esse bloco limpa os arrays de pai e nível
-    memset(ni,0,sizeof(bool)*(m_numVertices+1));
-    memset(p,0,sizeof(bool)*(m_numVertices+1));
-    
-    // BFS
+    if(printTree){
+        memset(p,0,sizeof(int)*(m_numVertices+1));
+        memset(ni,0,sizeof(int)*(m_numVertices+1));
+    }
+    // BFS que colore em 2 cores, 0 e 1.
     q.push(s);
-    vis[s] = true;
+    vis[s] = 0;
     while(!q.empty()){
         int u = q.front();
+        int c = vis[u];
         q.pop();
         for(auto edge: lAdj[u]){
             int v = edge.first;
-            if(!vis[v]){
+            if(vis[v] == -1){
+                // Caso a cor do vértice analisado na BFS, os seus filhos tem que ter a cor oposta.
+                vis[v] = vis[u]^1;
                 p[v] = u;
                 ni[v] = ni[u]+1;
                 q.push(v);
-                vis[v] = true;
+            }else{
+                // Caso a cor do seu filho seja igual ao seu, o grafo não é bipartido
+                is_bipartie &= vis[u] != vis[v];
+                if(is_bipartie == 0){
+                    break;
+                }
             }
         }   
     }
-
-    // Bloco executado caso o usuário queira imprimir o arquivo da árvore de busca
-    if(printTree){
-        ofstream bfsFile;
-        bfsFile.open ("bfsFileL.txt");
-        bfsFile << "VERTICE\tPAI\tNIVEL" << endl;
-        // Para cada vértice exibe o pai e o nível
-        for(int i=1;i<=m_numVertices;i++){
-            // Caso o vértice não tenha sido visitado pela bfs ele possui pai e nivel -1
-            if(i!=s && p[i] == 0 && ni[i] == 0) p[i]--,ni[i]--;
-            bfsFile << i << "\t" << p[i] << "\t" << ni[i] << endl; 
+    if(is_bipartie){
+        // Bloco executado caso o usuário queira imprimir o arquivo da árvore de busca
+        if(printTree){
+            ofstream bfsFile;
+            bfsFile.open ("bfsFileL.txt");
+            bfsFile << "O grafo é bipartido." << endl;
+            bfsFile << "VERTICE\tPAI\tNIVEL" << endl;
+            // Para cada vértice exibe o pai e o nível
+            for(int i=1;i<=m_numVertices;i++){
+                // Caso o vértice não tenha sido visitado pela bfs ele possui pai e nivel -1
+                if(i!=s && p[i] == 0 && ni[i] == 0) p[i]--,ni[i]--;
+                bfsFile << i << "\t" << p[i] << "\t" << ni[i] << "\t" << vis[i] << endl; 
+                if(vis[i] == 0){
+                    graphBipartite_A->push_back(i);
+                }
+                if(vis[i] == 1){
+                    graphBipartite_B->push_back(i);
+                }
+            }
+            
+            bfsFile.close();
         }
-        bfsFile.close();
+    }else{
+        printf("O grafo não é bipartido.");
     }
-
 }
 
 // (DFS) Depth-First Search na lista
@@ -461,3 +529,124 @@ double gLadj::exc_l(int u){
         return 0;
     }
 }
+
+bool gLadj::bfs() {
+	queue<int> q;
+
+	memset( dist, -1, sizeof(int)*(m_numVertices+1) );
+	
+    for( int i = 1 ; i <= m_numVertices ; ++i ){
+		if( b[i] == -1 ){
+			q.push( i ), dist[i] = 0;
+        }
+    }
+    
+	bool reached = false;
+	while( !q.empty() ) {
+		int n = q.front();
+		q.pop();
+		for( auto v : lAdj[n] ) {
+			if( b[v.first] == -1 ) reached = true;
+			else if( dist[b[v.first]] == -1 ) {
+				dist[b[v.first]] = dist[n] + 1;
+				q.push( b[v.first] );
+			}
+		}
+	}
+	return reached;
+}
+
+bool gLadj::dfs( int n ) {
+	if( n == -1 ) return true;
+	for( auto v : lAdj[n] ) {
+		if( b[v.first] == -1 || dist[b[v.first]] == dist[n] + 1 ) {
+			if( dfs( b[v.first] ) ) {
+				b[v.first] = n, b[n] = v.first;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+int gLadj::hk()
+{
+
+    bfs_l(1,false);
+    //Se a bfs conseguiu bipartir o grafo ele calcula o matching máximo
+    if(is_bipartie){
+        memset( b, -1,sizeof(int)*(m_numVertices+1));
+        
+        int ans = 0;
+        int k = 0;
+        
+        while( bfs() ) {
+            for( int i = 1 ; i <= m_numVertices ; ++i ){
+                if( b[i] == -1 && dfs( i ) ) ++ans;
+            }
+        }
+    
+        ofstream infoGrafo;
+        infoGrafo.open ("BipartideMatch.txt");
+        infoGrafo << "Aresta do Match" << endl;
+            for(int i=1;i<=m_numVertices;i++){
+                if(vis[i]==0 && b[i]!=-1) infoGrafo << i << " -> " << b[i] << endl;
+            }
+        infoGrafo.close();
+        
+        return ans;
+    }else{
+        printf("Não é bipartido.");
+        return 0;
+    }
+}
+
+void gLadj::BellmanFord(int s){
+    bool pcn = false;
+    //PCN é uma variável boleana que verifica se possui ciclo negativo e também é usada para ver se o algoritmo pode parar antes da última execução
+    
+    // Para que o algoritmo de Bellmanford consiga calcular todas as distâncias certinho é necessário que os vértices primeiramente tneham todas as distâncias em infinito
+    for(int i=0;i<=m_numVertices;i++){
+        dbf[i] = INF;
+    }
+    // Apenas o vértice de source irá ter sua distância inicial em 0
+    dbf[s] = 0;
+    for(int i=0;i<m_numVertices-1;i++){
+        pcn = true;
+        for(int j=1;j<=m_numVertices;j++){
+            for(auto v : lAdj[j]){
+                int vv = v.first;
+                double vw = v.second;
+                if(dbf[vv]>dbf[j]+vw){
+                    pcn = false;
+                    dbf[vv] = dbf[j]+vw;
+                }
+            }
+        }
+        if(pcn) break;
+    }
+    //Aqui verificamos se ao rodarmos mais uma vez o algoritmo de BellmanFord as mudanças mudam. Se mudarem, o grafo possui ciclo negativo.
+    pcn = false;
+    for(int j=1;j<=m_numVertices;j++){
+        for(auto v : lAdj[j]){
+            int vv = v.first;
+            double vw = v.second;
+            if(dbf[vv]>dbf[j]+vw){
+                pcn = true;
+                break;
+            }
+        }
+    }
+    
+    if(pcn) cout << "Possui ciclo negativo." << endl;
+    else cout << "Não possui ciclo negativo." << endl;
+}
+
+void gLadj::BellmanMatriz(){
+    //Para obter a matriz de BellmanFord, rodamos o algoritmo para cada vértice i como source.
+    for(int i=1;i<=m_numVertices;i++){
+        BellmanFord(i);
+    }
+    
+}
+
